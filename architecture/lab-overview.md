@@ -5,7 +5,7 @@ Hardware Platform
 Node: lab-node01
 Model: HP EliteDesk 800 G6
 CPU: Intel i7
-RAM: 32GB
+RAM: 16GB
 Storage: NVMe SSD
 
 Hypervisor
