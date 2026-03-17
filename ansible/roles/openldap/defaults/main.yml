@@ -1,0 +1,5 @@
+---
+ldap_domain: "homelab.local"
+ldap_base_dn: "dc=homelab,dc=local"
+ldap_admin_password: "admin123"
+ldap_organization: "Homelab"

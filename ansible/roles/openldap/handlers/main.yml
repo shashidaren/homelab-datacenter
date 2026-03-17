@@ -1,0 +1,5 @@
+---
+- name: restart ldap
+  systemd:
+    name: slapd
+    state: restarted

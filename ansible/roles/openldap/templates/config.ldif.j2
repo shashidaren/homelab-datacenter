@@ -1,0 +1,14 @@
+dn: olcDatabase={2}mdb,cn=config
+changetype: modify
+replace: olcSuffix
+olcSuffix: {{ ldap_base_dn }}
+
+dn: olcDatabase={2}mdb,cn=config
+changetype: modify
+replace: olcRootDN
+olcRootDN: {{ ldap_admin_dn }}
+
+dn: olcDatabase={2}mdb,cn=config
+changetype: modify
+replace: olcRootPW
+olcRootPW: {{ ldap_password_hash.stdout }}

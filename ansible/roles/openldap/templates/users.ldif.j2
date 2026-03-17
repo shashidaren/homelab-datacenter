@@ -1,0 +1,15 @@
+{% for user in ldap_users %}
+dn: uid={{ user.uid }},ou=People,{{ ldap_base_dn }}
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: {{ user.cn }}
+sn: {{ user.sn }}
+uid: {{ user.uid }}
+uidNumber: {{ user.uidNumber }}
+gidNumber: {{ user.gidNumber }}
+homeDirectory: /home/{{ user.uid }}
+loginShell: /bin/bash
+userPassword: {{ user_passwords.results[loop.index0].stdout }}
+
+{% endfor %}

@@ -1,0 +1,107 @@
+---
+
+- name: Enable CRB repository
+  command: dnf config-manager --set-enabled crb
+  changed_when: false
+
+- name: Install EPEL repository
+  dnf:
+    name: epel-release
+    state: present
+
+- name: Install OpenLDAP packages
+  dnf:
+    name: "{{ ldap_packages }}"
+    state: present
+
+- name: Enable and start slapd
+  systemd:
+    name: slapd
+    enabled: yes
+    state: started
+
+# 🔐 Generate admin password hash
+- name: Generate LDAP admin password hash
+  command: slappasswd -s {{ ldap_admin_password }}
+  register: ldap_password_hash
+
+# 📄 Config LDIF
+- name: Create config LDIF
+  template:
+    src: config.ldif.j2
+    dest: /tmp/config.ldif
+
+# ⚙️ Apply config
+- name: Configure LDAP database
+  command: ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/config.ldif
+
+# 📄 Base structure
+- name: Create base LDIF
+  template:
+    src: base.ldif.j2
+    dest: /tmp/base.ldif
+
+- name: Add base LDAP entries
+  command: >
+    ldapadd -x -D "{{ ldap_admin_dn }}"
+    -w {{ ldap_admin_password }}
+    -f /tmp/base.ldif
+  ignore_errors: yes
+
+# 📄 OU structure
+- name: Create OU LDIF
+  template:
+    src: ou.ldif.j2
+    dest: /tmp/ou.ldif
+
+- name: Apply OU structure
+  command: >
+    ldapadd -x -D "{{ ldap_admin_dn }}"
+    -w {{ ldap_admin_password }}
+    -f /tmp/ou.ldif
+  ignore_errors: yes
+
+# 🔥 LOAD SCHEMAS (CRITICAL FIX)
+- name: Load cosine schema
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+  ignore_errors: yes
+
+- name: Load nis schema
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
+  ignore_errors: yes
+
+- name: Load inetorgperson schema
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
+  ignore_errors: yes
+
+# 🔐 Generate user password hashes
+- name: Generate password hashes for users
+  shell: slappasswd -s {{ item.password }}
+  loop: "{{ ldap_users }}"
+  register: user_passwords
+
+# 👥 Users
+- name: Create users LDIF
+  template:
+    src: users.ldif.j2
+    dest: /tmp/users.ldif
+
+- name: Apply users
+  command: >
+    ldapadd -x -D "{{ ldap_admin_dn }}"
+    -w {{ ldap_admin_password }}
+    -f /tmp/users.ldif
+  ignore_errors: yes
+
+# 👥 Groups
+- name: Create groups LDIF
+  template:
+    src: groups.ldif.j2
+    dest: /tmp/groups.ldif
+
+- name: Apply groups
+  command: >
+    ldapadd -x -D "{{ ldap_admin_dn }}"
+    -w {{ ldap_admin_password }}
+    -f /tmp/groups.ldif
+  ignore_errors: yes

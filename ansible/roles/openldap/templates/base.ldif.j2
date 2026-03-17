@@ -1,0 +1,11 @@
+dn: {{ ldap_base_dn }}
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+o: lab
+dc: lab
+
+dn: {{ ldap_admin_dn }}
+objectClass: organizationalRole
+cn: admin
+description: LDAP Administrator
