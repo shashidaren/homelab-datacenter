@@ -1,0 +1,10 @@
+#- name: Generate password hashes
+#  command: slappasswd -s {{ item.password }}
+#  loop: "{{ ldap_users }}"
+#  register: user_passwords
+#  delegate_to: localhost  # <--- THIS IS THE KEY
+
+- name: Create users LDIF
+  template:
+    src: users.ldif.j2
+    dest: /tmp/users.ldif

@@ -1,0 +1,14 @@
+- name: Create OU LDIF
+  template:
+    src: ou.ldif.j2
+    dest: /tmp/ou.ldif
+
+- name: Apply OU structure
+  command: >
+    ldapadd -x -D "{{ ldap_admin_dn }}"
+    -w "{{ ldap_admin_password }}"
+    -f /tmp/ou.ldif
+  register: ou_add
+  failed_when:
+    - ou_add.rc != 0
+    - "'Already exists' not in ou_add.stderr"

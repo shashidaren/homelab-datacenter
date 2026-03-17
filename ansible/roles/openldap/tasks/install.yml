@@ -1,0 +1,26 @@
+- name: Enable CRB repository
+  command: dnf config-manager --set-enabled crb
+  changed_when: false
+
+
+- name: Install EPEL repository
+  dnf:
+    name: epel-release
+    state: present
+
+- name: Optimize DNF for your lab network
+  lineinfile:
+    path: /etc/dnf/dnf.conf
+    line: "max_parallel_downloads=10"
+    state: present
+
+- name: Install OpenLDAP packages
+  dnf:
+    name: "{{ ldap_packages }}"
+    state: present
+
+- name: Enable and start slapd
+  systemd:
+    name: slapd
+    enabled: yes
+    state: started

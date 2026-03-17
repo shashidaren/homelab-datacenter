@@ -1,0 +1,20 @@
+- name: Load cosine schema
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+  register: cosine_schema
+  failed_when:
+    - cosine_schema.rc != 0
+    - "'already exists' not in cosine_schema.stderr"
+
+- name: Load nis schema
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
+  register: nis_schema
+  failed_when:
+    - nis_schema.rc != 0
+    - "'already exists' not in nis_schema.stderr"
+
+- name: Load inetorgperson schema
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
+  register: inet_schema
+  failed_when:
+    - inet_schema.rc != 0
+    - "'already exists' not in inet_schema.stderr"

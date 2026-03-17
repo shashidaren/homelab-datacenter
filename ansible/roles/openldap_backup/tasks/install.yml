@@ -1,0 +1,10 @@
+- name: Install OpenLDAP packages
+  dnf:
+    name: "{{ ldap_packages }}"
+    state: present
+
+- name: Enable and start slapd
+  systemd:
+    name: slapd
+    enabled: yes
+    state: started

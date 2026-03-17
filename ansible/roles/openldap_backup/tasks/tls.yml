@@ -1,0 +1,106 @@
+---
+
+- name: Create cert directory
+  file:
+    path: /etc/openldap/certs
+    state: directory
+    owner: ldap
+    group: ldap
+    mode: '0755'
+
+# 🔐 CA key
+- name: Generate CA key
+  command: openssl genrsa -out /etc/openldap/certs/ca.key 4096
+  args:
+    creates: /etc/openldap/certs/ca.key
+
+# 📜 CA cert
+- name: Generate CA certificate
+  command: >
+    openssl req -x509 -new -nodes -key /etc/openldap/certs/ca.key
+    -sha256 -days 3650
+    -subj "/CN=lab-ldap-ca"
+    -out /etc/openldap/certs/ca.crt
+  args:
+    creates: /etc/openldap/certs/ca.crt
+
+# 🔑 Server key
+- name: Generate LDAP key
+  command: openssl genrsa -out /etc/openldap/certs/ldap.key 2048
+  args:
+    creates: /etc/openldap/certs/ldap.key
+
+# 📄 CSR
+- name: Generate CSR
+  command: >
+    openssl req -new
+    -key /etc/openldap/certs/ldap.key
+    -subj "/CN={{ inventory_hostname }}"
+    -out /etc/openldap/certs/ldap.csr
+  args:
+    creates: /etc/openldap/certs/ldap.csr
+
+# 📜 Server cert
+- name: Generate signed cert
+  command: >
+    openssl x509 -req
+    -in /etc/openldap/certs/ldap.csr
+    -CA /etc/openldap/certs/ca.crt
+    -CAkey /etc/openldap/certs/ca.key
+    -CAcreateserial
+    -out /etc/openldap/certs/ldap.crt
+    -days 3650 -sha256
+  args:
+    creates: /etc/openldap/certs/ldap.crt
+
+# 🔒 Permissions
+- name: Fix cert permissions
+  file:
+    path: /etc/openldap/certs
+    owner: ldap
+    group: ldap
+    recurse: yes
+
+- name: Secure private key
+  file:
+    path: /etc/openldap/certs/ldap.key
+    mode: '0600'
+
+# 📄 TLS config LDIF
+- name: Create TLS config LDIF
+  copy:
+    dest: /tmp/tls.ldif
+    content: |
+      dn: cn=config
+      changetype: modify
+      replace: olcTLSCertificateFile
+      olcTLSCertificateFile: /etc/openldap/certs/ldap.crt
+
+      dn: cn=config
+      changetype: modify
+      replace: olcTLSCertificateKeyFile
+      olcTLSCertificateKeyFile: /etc/openldap/certs/ldap.key
+
+      dn: cn=config
+      changetype: modify
+      replace: olcTLSCACertificateFile
+      olcTLSCACertificateFile: /etc/openldap/certs/ca.crt
+
+# ⚙️ Apply TLS config
+- name: Apply TLS config
+  command: ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/tls.ldif
+
+# 🔄 Restart slapd
+- name: Restart slapd
+  systemd:
+    name: slapd
+    state: restarted
+
+- name: Install CA certificate into system trust
+  copy:
+    src: /etc/openldap/certs/ca.crt
+    dest: /etc/pki/ca-trust/source/anchors/ca.crt
+    remote_src: yes
+
+- name: Update CA trust
+  command: update-ca-trust
