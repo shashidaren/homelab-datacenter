@@ -1,7 +1,0 @@
-dn: {{ ldap_base_dn }}
-objectClass: top
-objectClass: dcObject
-objectClass: organization
-
-o: {{ ldap_org | default('lab') }}
-dc: {{ ldap_domain.split('.')[0] }}

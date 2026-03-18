@@ -1,0 +1,7 @@
+---
+- name: Application - Deploy AI-Ops Stack
+  hosts: docker
+  become: yes
+  roles:
+    - ai_ops_stack
+

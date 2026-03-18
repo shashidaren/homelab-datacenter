@@ -1,0 +1,52 @@
+---
+- name: Bootstrap PyYAML via raw command
+  ansible.builtin.raw: dnf install -y python3-pyyaml python3-pip
+  become: true
+  changed_when: false
+
+- name: Install Docker SDK for Python via pip
+  ansible.builtin.pip:
+    name: docker
+    executable: pip3
+  become: true
+
+- name: Create persistent storage directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  become: true
+  loop:
+    - /opt/ai-ops/loki
+    - /opt/ai-ops/grafana
+    - /opt/ai-ops/promtail
+
+- name: Deploy AI-Ops Stack via Docker Compose
+  community.docker.docker_compose_v2:
+    project_name: ai-ops
+    definition:
+      version: '3.8'
+      services:
+        loki:
+          image: grafana/loki:latest
+          ports:
+            - "3100:3100"
+          volumes:
+            - /opt/ai-ops/loki:/loki
+          command: -config.file=/etc/loki/local-config.yaml
+
+        promtail:
+          image: grafana/promtail:latest
+          volumes:
+            - /var/log:/var/log
+          command: -config.file=/etc/promtail/config.yml
+
+        grafana:
+          image: grafana/grafana:latest
+          ports:
+            - "3000:3000"
+          volumes:
+            - /opt/ai-ops/grafana:/var/lib/grafana
+          environment:
+            - GF_SECURITY_ADMIN_PASSWORD=admin
+  become: true

@@ -1,0 +1,35 @@
+---
+- name: Remove Podman and conflicting tools
+  dnf:
+    name: [podman, buildah]
+    state: absent
+
+- name: Add Docker CentOS repository using config-manager logic
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: '0644'
+
+- name: Install Docker and dependencies with allowerasing
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+    allowerasing: yes
+
+- name: Ensure Docker is started and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Add shashi to docker group
+  ansible.builtin.user:
+    name: shashi
+    groups: docker
+    append: yes
+

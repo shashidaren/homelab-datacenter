@@ -1,8 +1,0 @@
-- import_tasks: install.yml
-- import_tasks: schema.yml
-- import_tasks: config.yml
-- import_tasks: base.yml
-- import_tasks: ou.yml
-- import_tasks: groups.yml
-- import_tasks: users.yml
-- import_tasks: tls.yml
