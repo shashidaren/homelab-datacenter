@@ -1,7 +1,0 @@
----
-
-- hosts: ldap_servers
-  become: yes
-
-  roles:
-    - openldap

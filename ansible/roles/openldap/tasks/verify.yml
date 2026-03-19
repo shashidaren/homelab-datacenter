@@ -1,0 +1,33 @@
+---
+- name: Verify OpenLDAP Deployment (Rocky 9)
+  block:
+    - name: Ensure slapd service is active and enabled
+      ansible.builtin.systemd:
+        name: slapd
+        state: started
+        enabled: true
+
+    - name: Verify Database Initialization (MDB Check)
+      ansible.builtin.shell: >
+        ldapsearch -H ldap://localhost -x -s base -b "" -LLL "namingContexts"
+      register: ldap_naming_contexts
+      changed_when: false
+      failed_when: "ldap_base_dn not in ldap_naming_contexts.stdout"
+
+    - name: Verify Admin Authentication (Bind Test)
+      ansible.builtin.shell: >
+        ldapsearch -x -H ldap://localhost 
+        -D "cn=admin,{{ ldap_base_dn }}" 
+        -w "{{ ldap_admin_password }}" 
+        -b "{{ ldap_base_dn }}" 
+        -s base
+      register: admin_bind_test
+      changed_when: false
+      failed_when: "'result: 0 Success' not in admin_bind_test.stdout"
+
+    - name: Verify Organizational Units (People/Groups)
+      ansible.builtin.shell: >
+        ldapsearch -x -b "{{ ldap_base_dn }}" "(objectClass=organizationalUnit)"
+      register: ou_search
+      failed_when: "'numEntries: 2' not in ou_search.stdout" # Adjust based on your OU count
+      changed_when: false

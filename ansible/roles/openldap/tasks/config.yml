@@ -1,13 +1,22 @@
 - name: Generate admin password hash
-  command: slappasswd -s {{ ldap_admin_password }}
+  ansible.builtin.command: slappasswd -s {{ ldap_admin_password }}
   register: ldap_password_hash
   changed_when: false
 
 - name: Create config LDIF
-  template:
+  ansible.builtin.template:
     src: config.ldif.j2
     dest: /tmp/config.ldif
+    mode: '0600'  # <--- Shifted left to align with 'ansible.builtin.template'
+
+- name: Check if LDAP config is already applied
+  ansible.builtin.shell: >
+    ldapsearch -Q -LLL -Y EXTERNAL -H ldapi:/// -b "cn=config" "(olcSuffix={{ ldap_base_dn }})"
+  register: config_check
+  changed_when: false
+  failed_when: false
 
 - name: Apply LDAP config
-  command: ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/config.ldif
+  ansible.builtin.command: ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/config.ldif
+  when: "ldap_base_dn not in config_check.stdout"
   notify: restart slapd
