@@ -1,0 +1,29 @@
+---
+- name: Install EPEL repository (Required for Rocky/RHEL 9)
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+  become: true
+  when: ansible_os_family == "RedHat" and ansible_distribution_major_version == "9"
+
+- name: Install Node Exporter package
+  ansible.builtin.dnf:
+    name: node_exporter  # Note: EPEL package name is usually simpler
+    state: present
+  become: true
+
+- name: Ensure Node Exporter is enabled and running
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: true
+  become: true
+
+- name: Open Firewall Port 9100
+  ansible.posix.firewalld:
+    port: 9100/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  become: true
+  when: ansible_os_family == "RedHat"

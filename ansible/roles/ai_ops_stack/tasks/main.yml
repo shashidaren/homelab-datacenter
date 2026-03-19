@@ -1,5 +1,5 @@
 ---
-- name: Bootstrap PyYAML via raw command
+- name: Bootstrap PyYAML and Pip via raw command
   ansible.builtin.raw: dnf install -y python3-pyyaml python3-pip
   become: true
   changed_when: false
@@ -10,16 +10,99 @@
     executable: pip3
   become: true
 
-- name: Create persistent storage directories
+- name: Create Observability directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    mode: '0755'
+    mode: '0775'
+    owner: "10001"
+    group: "10001"
   become: true
   loop:
     - /opt/ai-ops/loki
-    - /opt/ai-ops/grafana
+    - /opt/ai-ops/loki-config
     - /opt/ai-ops/promtail
+    - /opt/ai-ops/prometheus
+    - /opt/ai-ops/prometheus-config
+
+- name: Create Grafana directory with correct UID
+  ansible.builtin.file:
+    path: /opt/ai-ops/grafana
+    state: directory
+    mode: '0775'
+    owner: "472"
+    group: "472"
+  become: true
+
+- name: Create Loki Configuration File with 7d Retention
+  ansible.builtin.copy:
+    dest: /opt/ai-ops/loki-config/local-config.yaml
+    content: |
+      auth_enabled: false
+      server:
+        http_listen_port: 3100
+      common:
+        instance_addr: 127.0.0.1
+        path_prefix: /loki
+        storage:
+          filesystem:
+            chunks_directory: /loki/chunks
+            rules_directory: /loki/rules
+        replication_factor: 1
+        ring:
+          kvstore:
+            store: inmemory
+      limits_config:
+        allow_structured_metadata: false
+        retention_period: 168h # 7 Days
+      compactor:
+        working_directory: /loki/compactor
+        retention_enabled: true
+      schema_config:
+        configs:
+          - from: 2024-01-01
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+  become: true
+
+- name: Create Prometheus Configuration File
+  ansible.builtin.copy:
+    dest: /opt/ai-ops/prometheus-config/prometheus.yml
+    content: |
+      global:
+        scrape_interval: 15s
+      scrape_configs:
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+        - job_name: 'node_exporter'
+          static_configs:
+            - targets: ['localhost:9100']
+  become: true
+
+- name: Create Promtail Configuration File
+  ansible.builtin.copy:
+    dest: /opt/ai-ops/promtail/config.yml
+    content: |
+      server:
+        http_listen_port: 9080
+      positions:
+        filename: /tmp/positions.yaml
+      clients:
+        - url: http://loki:3100/loki/api/v1/push
+      scrape_configs:
+        - job_name: system
+          static_configs:
+            - targets: [localhost]
+              labels:
+                job: varlogs
+                host: docker01
+                __path__: /var/log/*.log
+  become: true
 
 - name: Deploy AI-Ops Stack via Docker Compose
   community.docker.docker_compose_v2:
@@ -29,24 +112,72 @@
       services:
         loki:
           image: grafana/loki:latest
-          ports:
-            - "3100:3100"
+          ports: ["3100:3100"]
           volumes:
-            - /opt/ai-ops/loki:/loki
+            - /opt/ai-ops/loki:/loki:Z
+            - /opt/ai-ops/loki-config/local-config.yaml:/etc/loki/local-config.yaml:Z
           command: -config.file=/etc/loki/local-config.yaml
+          restart: always
+
+        prometheus:
+          image: prom/prometheus:latest
+          ports: ["9090:9090"]
+          volumes:
+            - /opt/ai-ops/prometheus-config/prometheus.yml:/etc/prometheus/prometheus.yml:Z
+            - /opt/ai-ops/prometheus:/prometheus:Z
+          command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--storage.tsdb.retention.time=7d' # New: 7-day metric retention
+          restart: always
 
         promtail:
           image: grafana/promtail:latest
           volumes:
-            - /var/log:/var/log
+            - /var/log:/var/log:ro,Z
+            - /opt/ai-ops/promtail/config.yml:/etc/promtail/config.yml:Z
           command: -config.file=/etc/promtail/config.yml
+          restart: always
 
         grafana:
           image: grafana/grafana:latest
-          ports:
-            - "3000:3000"
+          ports: ["3000:3000"]
           volumes:
-            - /opt/ai-ops/grafana:/var/lib/grafana
+            - /opt/ai-ops/grafana:/var/lib/grafana:Z
           environment:
             - GF_SECURITY_ADMIN_PASSWORD=admin
+          restart: always
   become: true
+
+- name: Create Prometheus Rules File
+  ansible.builtin.template:
+    src: node_alerts.yml.j2
+    dest: /opt/ai-ops/prometheus-config/node_alerts.yml
+  become: true
+
+- name: Update Prometheus Configuration to include Rules
+  ansible.builtin.copy:
+    dest: /opt/ai-ops/prometheus-config/prometheus.yml
+    content: |
+      global:
+        scrape_interval: 15s
+      
+      rule_files:
+        - "node_alerts.yml" # Point Prometheus to the alerts file
+
+      scrape_configs:
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+        - job_name: 'node_exporter'
+          static_configs:
+            - targets: ['localhost:9100']
+  become: true
+
+- name: Create Prometheus Alert Rules File
+  ansible.builtin.template:
+    src: node_alerts.yml.j2
+    dest: /opt/ai-ops/prometheus-config/node_alerts.yml
+    mode: '0644'
+  become: true
+  notify: Restart Prometheus  # Optional: adds a handler to refresh config

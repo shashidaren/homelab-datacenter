@@ -1,0 +1,49 @@
+groups:
+  - name: node_alerts
+    rules:
+{% raw %}
+      - alert: ServerDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Server Down"
+          description: "Node {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage above 80% for more than 2 minutes."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Root filesystem has less than 20% free space."
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 20
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Available memory is below 20%."
+
+      - alert: ClockSkewDetected
+        expr: abs(node_timex_offset_seconds) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Clock skew detected on {{ $labels.instance }}"
+          description: "System time offset exceeds 50ms."
+{% endraw %}
