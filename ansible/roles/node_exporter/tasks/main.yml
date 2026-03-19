@@ -1,18 +1,17 @@
 ---
-- name: Install EPEL repository (Required for Rocky/RHEL 9)
+- name: Ensure EPEL repository is present
   ansible.builtin.dnf:
     name: epel-release
     state: present
   become: true
-  when: ansible_os_family == "RedHat" and ansible_distribution_major_version == "9"
 
-- name: Install Node Exporter package
+- name: Install Node Exporter from EPEL
   ansible.builtin.dnf:
-    name: node_exporter  # Note: EPEL package name is usually simpler
+    name: node_exporter
     state: present
   become: true
 
-- name: Ensure Node Exporter is enabled and running
+- name: Ensure Node Exporter service is enabled and started
   ansible.builtin.systemd:
     name: node_exporter
     state: started
@@ -26,4 +25,3 @@
     state: enabled
     immediate: true
   become: true
-  when: ansible_os_family == "RedHat"

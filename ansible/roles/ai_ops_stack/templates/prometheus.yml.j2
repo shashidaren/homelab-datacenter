@@ -1,7 +1,24 @@
+global:
+  scrape_interval: 15s
+
+rule_files:
+  - "node_alerts.yml"
+
+# This connects your Rules to the Alertmanager service
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - 'alertmanager:9093'
+
 scrape_configs:
-  - job_name: 'node_exporter'
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'rocky_nodes'
     static_configs:
       - targets:
-{% for host in groups['all'] %}
-          - '{{ hostvars[host].ansible_host | default(host) }}:9100'
+{% for host in groups['monitoring_targets'] %}
+          - '{{ host }}:9100'
 {% endfor %}

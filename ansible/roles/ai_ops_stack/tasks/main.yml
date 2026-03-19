@@ -12,29 +12,22 @@
 
 - name: Create Observability directories
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     state: directory
     mode: '0775'
-    owner: "10001"
-    group: "10001"
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
   become: true
   loop:
-    - /opt/ai-ops/loki
-    - /opt/ai-ops/loki-config
-    - /opt/ai-ops/promtail
-    - /opt/ai-ops/prometheus
-    - /opt/ai-ops/prometheus-config
+    - { path: '/opt/ai-ops/loki', owner: '10001' }
+    - { path: '/opt/ai-ops/loki-config', owner: '10001' }
+    - { path: '/opt/ai-ops/promtail', owner: '10001' }
+    - { path: '/opt/ai-ops/prometheus-config', owner: '10001' }
+    - { path: '/opt/ai-ops/grafana', owner: '472' }
+    - { path: '/opt/ai-ops/prometheus', owner: '65534' } 
+    - { path: '/opt/ai-ops/alertmanager-config', owner: '10001' }
 
-- name: Create Grafana directory with correct UID
-  ansible.builtin.file:
-    path: /opt/ai-ops/grafana
-    state: directory
-    mode: '0775'
-    owner: "472"
-    group: "472"
-  become: true
-
-- name: Create Loki Configuration File with 7d Retention
+- name: Create Loki Configuration
   ansible.builtin.copy:
     dest: /opt/ai-ops/loki-config/local-config.yaml
     content: |
@@ -53,8 +46,7 @@
           kvstore:
             store: inmemory
       limits_config:
-        allow_structured_metadata: false
-        retention_period: 168h # 7 Days
+        retention_period: 168h
       compactor:
         working_directory: /loki/compactor
         retention_enabled: true
@@ -69,22 +61,20 @@
               period: 24h
   become: true
 
-- name: Create Prometheus Configuration File
-  ansible.builtin.copy:
-    dest: /opt/ai-ops/prometheus-config/prometheus.yml
-    content: |
-      global:
-        scrape_interval: 15s
-      scrape_configs:
-        - job_name: 'prometheus'
-          static_configs:
-            - targets: ['localhost:9090']
-        - job_name: 'node_exporter'
-          static_configs:
-            - targets: ['localhost:9100']
+- name: Create Prometheus Alert Rules
+  ansible.builtin.template:
+    src: node_alerts.yml.j2
+    dest: /opt/ai-ops/prometheus-config/node_alerts.yml
+    mode: '0644'
   become: true
 
-- name: Create Promtail Configuration File
+- name: Create Prometheus Main Configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2 # This is where the magic happens
+    dest: /opt/ai-ops/prometheus-config/prometheus.yml
+  become: true
+
+- name: Create Promtail Configuration
   ansible.builtin.copy:
     dest: /opt/ai-ops/promtail/config.yml
     content: |
@@ -104,7 +94,25 @@
                 __path__: /var/log/*.log
   become: true
 
-- name: Deploy AI-Ops Stack via Docker Compose
+- name: Create Alertmanager Configuration
+  ansible.builtin.copy:
+    dest: /opt/ai-ops/alertmanager-config/alertmanager.yml
+    content: |
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ['alertname']
+        group_wait: 10s
+        group_interval: 10s
+        repeat_interval: 1h
+        receiver: 'web.hook'
+      receivers:
+      - name: 'web.hook'
+        webhook_configs:
+        - url: 'http://127.0.0.1:5001/' # Placeholder for now
+  become: true
+
+- name: Deploy AI-Ops Stack
   community.docker.docker_compose_v2:
     project_name: ai-ops
     definition:
@@ -123,12 +131,21 @@
           image: prom/prometheus:latest
           ports: ["9090:9090"]
           volumes:
-            - /opt/ai-ops/prometheus-config/prometheus.yml:/etc/prometheus/prometheus.yml:Z
+            - /opt/ai-ops/prometheus-config:/etc/prometheus:Z
             - /opt/ai-ops/prometheus:/prometheus:Z
           command:
             - '--config.file=/etc/prometheus/prometheus.yml'
             - '--storage.tsdb.path=/prometheus'
-            - '--storage.tsdb.retention.time=7d' # New: 7-day metric retention
+            - '--storage.tsdb.retention.time=7d'
+          restart: always
+
+        alertmanager:
+          image: prom/alertmanager:latest
+          ports: ["9093:9093"]
+          volumes:
+            - /opt/ai-ops/alertmanager-config:/etc/alertmanager:Z
+          command:
+            - '--config.file=/etc/alertmanager/alertmanager.yml'
           restart: always
 
         promtail:
@@ -148,36 +165,3 @@
             - GF_SECURITY_ADMIN_PASSWORD=admin
           restart: always
   become: true
-
-- name: Create Prometheus Rules File
-  ansible.builtin.template:
-    src: node_alerts.yml.j2
-    dest: /opt/ai-ops/prometheus-config/node_alerts.yml
-  become: true
-
-- name: Update Prometheus Configuration to include Rules
-  ansible.builtin.copy:
-    dest: /opt/ai-ops/prometheus-config/prometheus.yml
-    content: |
-      global:
-        scrape_interval: 15s
-      
-      rule_files:
-        - "node_alerts.yml" # Point Prometheus to the alerts file
-
-      scrape_configs:
-        - job_name: 'prometheus'
-          static_configs:
-            - targets: ['localhost:9090']
-        - job_name: 'node_exporter'
-          static_configs:
-            - targets: ['localhost:9100']
-  become: true
-
-- name: Create Prometheus Alert Rules File
-  ansible.builtin.template:
-    src: node_alerts.yml.j2
-    dest: /opt/ai-ops/prometheus-config/node_alerts.yml
-    mode: '0644'
-  become: true
-  notify: Restart Prometheus  # Optional: adds a handler to refresh config
