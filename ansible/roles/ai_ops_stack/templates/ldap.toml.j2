@@ -1,0 +1,18 @@
+[[servers]]
+host = "{{ ldap_server_ip | default('ldap01.lab.local') }}"
+port = 389
+use_ssl = false
+bind_dn = "{{ ldap_admin_dn }}"
+bind_password = "{{ ldap_admin_password }}"
+
+[servers.search]
+base_dns = ["{{ ldap_base_dn }}"]
+user_filter = "(uid=%s)"
+
+[[servers.group_mappings]]
+group_dn = "cn=admins,ou=Groups,{{ ldap_base_dn }}"
+org_role = "Admin"
+
+[[servers.group_mappings]]
+group_dn = "cn=users,ou=Groups,{{ ldap_base_dn }}"
+org_role = "Viewer"

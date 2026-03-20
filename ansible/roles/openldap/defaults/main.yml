@@ -1,7 +1,3 @@
-ldap_domain: lab.local
-ldap_base_dn: "dc=lab,dc=local"
-ldap_admin_dn: "cn=admin,dc=lab,dc=local"
-ldap_admin_password: "ChangeMe123!"
 
 ldap_packages:
   - openldap

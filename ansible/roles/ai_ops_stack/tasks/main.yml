@@ -112,6 +112,23 @@
         - url: 'http://127.0.0.1:5001/' # Placeholder for now
   become: true
 
+- name: Create Grafana LDAP Configuration
+  ansible.builtin.template:
+    src: ldap.toml.j2
+    dest: /opt/ai-ops/grafana/ldap.toml
+    owner: '472' # Grafana user ID
+    group: '472'
+    mode: '0644'
+  become: true
+
+- name: Verify connection to OpenLDAP (VM 112)
+  ansible.builtin.wait_for:
+    host: "{{ ldap_server_ip | default('192.168.0.112') }}"
+    port: 389
+    timeout: 5
+    msg: "Cannot reach OpenLDAP server on port 389. Check VM 112 or Firewalld."
+  become: false
+
 - name: Deploy AI-Ops Stack
   community.docker.docker_compose_v2:
     project_name: ai-ops
@@ -161,7 +178,11 @@
           ports: ["3000:3000"]
           volumes:
             - /opt/ai-ops/grafana:/var/lib/grafana:Z
+            - /opt/ai-ops/grafana/ldap.toml:/etc/grafana/ldap.toml:ro,Z # Mount the config
           environment:
-            - GF_SECURITY_ADMIN_PASSWORD=admin
+            - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password | default('admin') }}
+            - GF_AUTH_LDAP_ENABLED=true
+            - GF_AUTH_LDAP_CONFIG_FILE=/etc/grafana/ldap.toml
+            - GF_AUTH_LDAP_ALLOW_SIGN_UP=true
           restart: always
   become: true
