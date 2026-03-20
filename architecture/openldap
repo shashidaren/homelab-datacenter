@@ -1,0 +1,185 @@
+OpenLDAP Setup Guide (Rocky Linux 9)
+
+A structured, production-style guide for deploying and securing OpenLDAP in a lab environment.
+
+📌 Environment
+
+OS: Rocky Linux 9
+
+Hostname: ldap01
+
+IP Address: 192.168.0.112
+
+Domain: dc=lab,dc=local
+
+🧱 Phase 1: Installation & Base Configuration
+
+Enable repository and install OpenLDAP:
+
+sudo dnf config-manager --set-enabled plus
+sudo dnf install -y openldap-servers openldap-clients
+sudo systemctl enable --now slapd
+Set Admin Password for cn=config
+# Generate password hash
+slappasswd -s "Telco666"
+
+cat <<EOF > chrootpw.ldif
+dn: olcDatabase={0}config,cn=config
+changetype: modify
+add: olcRootPW
+olcRootPW: {SSHA}PASTE_YOUR_CONFIG_HASH_HERE
+EOF
+
+sudo ldapadd -Y EXTERNAL -H ldapi:/// -f chrootpw.ldif
+🌐 Phase 2: Domain & Schema Definition
+Define Domain
+cat <<EOF > rootdb.ldif
+dn: olcDatabase={2}mdb,cn=config
+changetype: modify
+replace: olcSuffix
+olcSuffix: dc=lab,dc=local
+-
+replace: olcRootDN
+olcRootDN: cn=admin,dc=lab,dc=local
+-
+add: olcRootPW
+olcRootPW: {SSHA}PASTE_YOUR_DOMAIN_HASH_HERE
+EOF
+
+sudo ldapmodify -Y EXTERNAL -H ldapi:/// -f rootdb.ldif
+Load Required Schemas
+sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
+sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
+🔐 Phase 3: Security & Networking (Hardening)
+Firewall Configuration
+sudo firewall-cmd --add-service={ldap,ldaps} --permanent
+sudo firewall-cmd --reload
+Disable Anonymous Bind
+cat <<EOF > disable_anon.ldif
+dn: cn=config
+changetype: modify
+add: olcDisallows
+olcDisallows: bind_anon
+-
+add: olcRequires
+olcRequires: authc
+
+dn: olcDatabase={2}mdb,cn=config
+changetype: modify
+add: olcAccess
+olcAccess: {0}to * by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage by * break
+olcAccess: {1}to * by self read by dn.base="cn=admin,dc=lab,dc=local" write by * none
+EOF
+
+sudo ldapadd -Y EXTERNAL -H ldapi:/// -f disable_anon.ldif
+🔒 Phase 4: SSL/TLS (LDAPS) Setup
+Generate Certificates
+sudo mkdir -p /etc/openldap/certs
+
+sudo openssl req -new -x509 -nodes \
+-out /etc/openldap/certs/ldapcert.pem \
+-keyout /etc/openldap/certs/ldapkey.pem \
+-days 3650
+
+sudo chown ldap:ldap /etc/openldap/certs/*.pem
+Apply TLS Configuration
+cat <<EOF > certs.ldif
+dn: cn=config
+changetype: modify
+replace: olcTLSCertificateFile
+olcTLSCertificateFile: /etc/openldap/certs/ldapcert.pem
+-
+replace: olcTLSCertificateKeyFile
+olcTLSCertificateKeyFile: /etc/openldap/certs/ldapkey.pem
+-
+replace: olcTLSCACertificateFile
+olcTLSCACertificateFile: /etc/openldap/certs/ldapcert.pem
+EOF
+
+sudo ldapmodify -Y EXTERNAL -H ldapi:/// -f certs.ldif
+👥 Phase 5: Identity Tree Construction
+Base Structure
+cat <<EOF > base_structure.ldif
+dn: dc=lab,dc=local
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+o: lab
+dc: lab
+
+dn: ou=People,dc=lab,dc=local
+objectClass: organizationalUnit
+ou: People
+
+dn: ou=Groups,dc=lab,dc=local
+objectClass: organizationalUnit
+ou: Groups
+EOF
+
+ldapadd -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -f base_structure.ldif
+Users & Groups
+cat <<EOF > expansion.ldif
+# --- Users ---
+
+dn: uid=shashi,ou=People,dc=lab,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: Shashi
+sn: Shashi
+uid: shashi
+uidNumber: 2000
+gidNumber: 2000
+homeDirectory: /home/shashi
+loginShell: /bin/bash
+userPassword: YourSecretPassword123
+mail: shashi@lab.local
+
+# --- Groups ---
+
+dn: cn=admins,ou=Groups,dc=lab,dc=local
+objectClass: posixGroup
+cn: admins
+gidNumber: 2000
+memberUid: shashi
+EOF
+
+ldapmodify -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -a -f expansion.ldif
+Indexing (Performance Optimization)
+cat <<EOF > indexing.ldif
+dn: olcDatabase={2}mdb,cn=config
+changetype: modify
+replace: olcDbIndex
+olcDbIndex: objectClass eq
+olcDbIndex: uid pres,eq
+olcDbIndex: mail pres,eq
+olcDbIndex: cn pres,eq,sub
+olcDbIndex: memberUid eq
+EOF
+
+sudo ldapmodify -Y EXTERNAL -H ldapi:/// -f indexing.ldif
+💾 Phase 6: Maintenance & Backups
+Backup Script (Example)
+# /usr/local/bin/ldap_backup.sh
+
+BACKUP_DIR="/var/backups/ldap"
+DATE=$(date +%F)
+
+mkdir -p $BACKUP_DIR
+
+slapcat -b "dc=lab,dc=local" -l $BACKUP_DIR/ldap-$DATE.ldif
+Cron Job
+00 02 * * * /usr/local/bin/ldap_backup.sh > /dev/null 2>&1
+🔍 Verification Commands
+Verify Certificate
+openssl x509 -in /etc/openldap/certs/ldapcert.pem -text -noout | grep -E "Subject:|Not After"
+Verify Key Pair Match
+openssl x509 -noout -modulus -in /etc/openldap/certs/ldapcert.pem | openssl md5
+openssl rsa -noout -modulus -in /etc/openldap/certs/ldapkey.pem | openssl md5
+Verify LDAP Tree
+ldapsearch -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -b "dc=lab,dc=local" dn
+Test LDAPS
+LDAPTLS_REQCERT=never ldapsearch -x -H ldaps://localhost -D "cn=admin,dc=lab,dc=local"
+Monitor Logs
+sudo journalctl -u slapd -f
