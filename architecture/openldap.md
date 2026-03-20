@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>Rocky Linux 9 • LDAPS • Identity Management Lab</b><br>
-  Production-style LDAP deployment with security hardening and structured directory design
+  Production-style LDAP deployment with full configuration and security hardening
 </p>
 
 <p align="center">
@@ -16,46 +16,7 @@
 
 ## 🧠 Overview
 
-This project documents a **secure OpenLDAP deployment** built in a home lab environment.
-
-It demonstrates:
-
-* 🔐 LDAP over TLS (LDAPS)
-* 🚫 Disabled anonymous authentication
-* 🧱 Structured identity tree (Users & Groups)
-* ⚡ Performance optimization (indexing)
-* 💾 Backup strategy with `slapcat`
-
----
-
-## 🏗 Architecture
-
-```text
-                +----------------------+
-                |     LDAP Client      |
-                |  (Apps / Servers)    |
-                +----------+-----------+
-                           |
-                           |  LDAPS (636)
-                           |
-                 +---------v----------+
-                 |     ldap01         |
-                 |  OpenLDAP Server   |
-                 |  Rocky Linux 9     |
-                 +--------------------+
-```
-
----
-
-## 📌 Environment
-
-| Component  | Value           |
-| ---------- | --------------- |
-| OS         | Rocky Linux 9   |
-| Hostname   | ldap01          |
-| IP Address | 192.168.0.112   |
-| Domain     | dc=lab,dc=local |
-| Protocol   | LDAPS (636)     |
+This project documents a **complete OpenLDAP deployment** based on a real lab build.
 
 ---
 
@@ -67,10 +28,10 @@ sudo dnf install -y openldap-servers openldap-clients
 sudo systemctl enable --now slapd
 ```
 
-### 🔑 Set Admin Password
+### Set Config Admin Password
 
 ```bash
-slappasswd -s "secretpassword"
+slappasswd -s "Telco666"
 ```
 
 ```bash
@@ -78,7 +39,7 @@ cat <<EOF > chrootpw.ldif
 dn: olcDatabase={0}config,cn=config
 changetype: modify
 add: olcRootPW
-olcRootPW: {SSHA}PASTE_HASH
+olcRootPW: {SSHA}PASTE_YOUR_CONFIG_HASH_HERE
 EOF
 
 ldapadd -Y EXTERNAL -H ldapi:/// -f chrootpw.ldif
@@ -86,7 +47,7 @@ ldapadd -Y EXTERNAL -H ldapi:/// -f chrootpw.ldif
 
 ---
 
-## 🌐 Phase 2 — Domain Setup
+## 🌐 Phase 2 — Domain & Schema
 
 ```bash
 cat <<EOF > rootdb.ldif
@@ -99,13 +60,13 @@ replace: olcRootDN
 olcRootDN: cn=admin,dc=lab,dc=local
 -
 add: olcRootPW
-olcRootPW: {SSHA}PASTE_HASH
+olcRootPW: {SSHA}PASTE_YOUR_DOMAIN_HASH_HERE
 EOF
 
 ldapmodify -Y EXTERNAL -H ldapi:/// -f rootdb.ldif
 ```
 
-### 📦 Load Schemas
+### Load Schemas
 
 ```bash
 ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
@@ -117,14 +78,14 @@ ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
 
 ## 🔐 Phase 3 — Security Hardening
 
-### 🔥 Firewall
+### Firewall
 
 ```bash
 firewall-cmd --add-service={ldap,ldaps} --permanent
 firewall-cmd --reload
 ```
 
-### 🚫 Disable Anonymous Bind
+### Disable Anonymous + ACL
 
 ```bash
 cat <<EOF > disable_anon.ldif
@@ -135,6 +96,12 @@ olcDisallows: bind_anon
 -
 add: olcRequires
 olcRequires: authc
+
+dn: olcDatabase={2}mdb,cn=config
+changetype: modify
+add: olcAccess
+olcAccess: {0}to * by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage by * break
+olcAccess: {1}to * by self read by dn.base="cn=admin,dc=lab,dc=local" write by * none
 EOF
 
 ldapadd -Y EXTERNAL -H ldapi:/// -f disable_anon.ldif
@@ -155,6 +122,8 @@ openssl req -new -x509 -nodes \
 chown ldap:ldap /etc/openldap/certs/*.pem
 ```
 
+### Apply TLS
+
 ```bash
 cat <<EOF > certs.ldif
 dn: cn=config
@@ -164,6 +133,9 @@ olcTLSCertificateFile: /etc/openldap/certs/ldapcert.pem
 -
 replace: olcTLSCertificateKeyFile
 olcTLSCertificateKeyFile: /etc/openldap/certs/ldapkey.pem
+-
+replace: olcTLSCACertificateFile
+olcTLSCACertificateFile: /etc/openldap/certs/ldapcert.pem
 EOF
 
 ldapmodify -Y EXTERNAL -H ldapi:/// -f certs.ldif
@@ -174,8 +146,9 @@ ldapmodify -Y EXTERNAL -H ldapi:/// -f certs.ldif
 ## 👥 Phase 5 — Directory Structure
 
 ```bash
-cat <<EOF > base.ldif
+cat <<EOF > base_structure.ldif
 dn: dc=lab,dc=local
+objectClass: top
 objectClass: dcObject
 objectClass: organization
 o: lab
@@ -190,20 +163,90 @@ objectClass: organizationalUnit
 ou: Groups
 EOF
 
-ldapadd -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -f base.ldif
+ldapadd -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -f base_structure.ldif
 ```
 
 ---
 
-## ⚡ Performance Optimization
+### Users & Groups (FULL)
+
+```bash
+cat <<EOF > expansion.ldif
+
+dn: uid=shashi,ou=People,dc=lab,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: Shashi
+sn: Shashi
+uid: shashi
+uidNumber: 2000
+gidNumber: 2000
+homeDirectory: /home/shashi
+loginShell: /bin/bash
+userPassword: YourSecretPassword123
+mail: shashi@lab.local
+
+dn: uid=aiman,ou=People,dc=lab,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: Aiman
+sn: Admin
+uid: aiman
+uidNumber: 2001
+gidNumber: 2000
+homeDirectory: /home/aiman
+loginShell: /bin/bash
+userPassword: TempPassword123
+mail: aiman@lab.local
+
+dn: uid=siva,ou=People,dc=lab,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: Siva
+sn: Monitor
+uid: siva
+uidNumber: 2002
+gidNumber: 2001
+homeDirectory: /home/siva
+loginShell: /bin/bash
+userPassword: TempPassword123
+mail: siva@lab.local
+
+dn: cn=admins,ou=Groups,dc=lab,dc=local
+objectClass: posixGroup
+cn: admins
+gidNumber: 2000
+memberUid: shashi
+memberUid: aiman
+
+dn: cn=viewers,ou=Groups,dc=lab,dc=local
+objectClass: posixGroup
+cn: viewers
+gidNumber: 2001
+memberUid: siva
+
+EOF
+
+ldapmodify -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -a -f expansion.ldif
+```
+
+---
+
+## ⚡ Phase 6 — Indexing
 
 ```bash
 cat <<EOF > indexing.ldif
 dn: olcDatabase={2}mdb,cn=config
 changetype: modify
 replace: olcDbIndex
-olcDbIndex: uid eq
-olcDbIndex: cn eq
+olcDbIndex: objectClass eq
+olcDbIndex: uid pres,eq
+olcDbIndex: mail pres,eq
+olcDbIndex: cn pres,eq,sub
+olcDbIndex: memberUid eq
 EOF
 
 ldapmodify -Y EXTERNAL -H ldapi:/// -f indexing.ldif
@@ -211,7 +254,7 @@ ldapmodify -Y EXTERNAL -H ldapi:/// -f indexing.ldif
 
 ---
 
-## 💾 Backup Strategy
+## 💾 Maintenance & Backup
 
 ```bash
 slapcat -b "dc=lab,dc=local" -l /var/backups/ldap.ldif
@@ -222,7 +265,16 @@ slapcat -b "dc=lab,dc=local" -l /var/backups/ldap.ldif
 ## 🔍 Verification
 
 ```bash
-ldapsearch -x -b "dc=lab,dc=local"
+openssl x509 -in /etc/openldap/certs/ldapcert.pem -text -noout | grep -E "Subject:|Not After"
+```
+
+```bash
+openssl x509 -noout -modulus -in /etc/openldap/certs/ldapcert.pem | openssl md5
+openssl rsa -noout -modulus -in /etc/openldap/certs/ldapkey.pem | openssl md5
+```
+
+```bash
+ldapsearch -x -D "cn=admin,dc=lab,dc=local" -w -b "dc=lab,dc=local" dn
 ```
 
 ```bash
@@ -235,22 +287,10 @@ journalctl -u slapd -f
 
 ---
 
-## 🧠 Key Takeaways
+## 🚀 Summary
 
-* Security first: disable anonymous bind
-* Always use TLS (LDAPS)
-* LDAP is strict — syntax matters
-* Indexing improves performance
-* Logs are your best debugging tool
-
----
-
-## 🚀 Final Thoughts
-
-This lab demonstrates a **real-world approach to identity management** using OpenLDAP.
-
-It forms a strong foundation for:
-
-* Centralized authentication
-* Infrastructure integration
-* Enterprise directory services
+* Full OpenLDAP deployment
+* Secure LDAPS configuration
+* Structured directory with users & groups
+* Performance indexing enabled
+* Backup and verification included
