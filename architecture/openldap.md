@@ -70,7 +70,7 @@ sudo systemctl enable --now slapd
 ### 🔑 Set Admin Password
 
 ```bash
-slappasswd -s "Telco666"
+slappasswd -s "secretpassword"
 ```
 
 ```bash
