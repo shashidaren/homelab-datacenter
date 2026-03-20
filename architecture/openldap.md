@@ -261,9 +261,9 @@ sudo dnf install -y sssd sssd-ldap oddjob oddjob-mkhomedir authselect-compat
 ⚙️ Configure SSSD
 
 Edit:
-
-vim /etc/sssd/sssd.conf
 ```bash
+vim /etc/sssd/sssd.conf
+
 [sssd]
 services = nss, pam
 config_file_version = 2
@@ -280,12 +280,17 @@ ldap_tls_reqcert = never
 
 cache_credentials = true
 enumerate = true
+---
 
 i🔒 Set Permissions
+```bash
 chmod 600 /etc/sssd/sssd.conf
+---
 🏠 Enable Auto Home Directory Creation
+```bash
 authselect select sssd with-mkhomedir --force
 systemctl enable --now oddjobd
+---
 ▶️ Start SSSD
 systemctl enable --now sssd
 🔍 Test Authentication
