@@ -1,38 +1,94 @@
-OpenLDAP Setup Guide (Rocky Linux 9)
+# 🔐 OpenLDAP Lab Guide
 
-A structured, production-style guide for deploying and securing OpenLDAP in a lab environment.
+<p align="center">
+  <b>Rocky Linux 9 • LDAPS • Identity Management Lab</b><br>
+  Production-style LDAP deployment with security hardening and structured directory design
+</p>
 
-📌 Environment
+<p align="center">
+  <img src="https://img.shields.io/badge/OS-Rocky%20Linux%209-blue?style=for-the-badge">
+  <img src="https://img.shields.io/badge/LDAP-OpenLDAP-green?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Security-LDAPS%20Enabled-success?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Status-Lab%20Project-orange?style=for-the-badge">
+</p>
 
-OS: Rocky Linux 9
+---
 
-Hostname: ldap01
+## 🧠 Overview
 
-IP Address: 192.168.0.112
+This project documents a **secure OpenLDAP deployment** built in a home lab environment.
 
-Domain: dc=lab,dc=local
+It demonstrates:
 
-🧱 Phase 1: Installation & Base Configuration
+* 🔐 LDAP over TLS (LDAPS)
+* 🚫 Disabled anonymous authentication
+* 🧱 Structured identity tree (Users & Groups)
+* ⚡ Performance optimization (indexing)
+* 💾 Backup strategy with `slapcat`
 
-Enable repository and install OpenLDAP:
+---
 
+## 🏗 Architecture
+
+```text
+                +----------------------+
+                |     LDAP Client      |
+                |  (Apps / Servers)    |
+                +----------+-----------+
+                           |
+                           |  LDAPS (636)
+                           |
+                 +---------v----------+
+                 |     ldap01         |
+                 |  OpenLDAP Server   |
+                 |  Rocky Linux 9     |
+                 +--------------------+
+```
+
+---
+
+## 📌 Environment
+
+| Component  | Value           |
+| ---------- | --------------- |
+| OS         | Rocky Linux 9   |
+| Hostname   | ldap01          |
+| IP Address | 192.168.0.112   |
+| Domain     | dc=lab,dc=local |
+| Protocol   | LDAPS (636)     |
+
+---
+
+## 🧱 Phase 1 — Installation
+
+```bash
 sudo dnf config-manager --set-enabled plus
 sudo dnf install -y openldap-servers openldap-clients
 sudo systemctl enable --now slapd
-Set Admin Password for cn=config
-# Generate password hash
-slappasswd -s "Telco666"
+```
 
+### 🔑 Set Admin Password
+
+```bash
+slappasswd -s "Telco666"
+```
+
+```bash
 cat <<EOF > chrootpw.ldif
 dn: olcDatabase={0}config,cn=config
 changetype: modify
 add: olcRootPW
-olcRootPW: {SSHA}PASTE_YOUR_CONFIG_HASH_HERE
+olcRootPW: {SSHA}PASTE_HASH
 EOF
 
-sudo ldapadd -Y EXTERNAL -H ldapi:/// -f chrootpw.ldif
-🌐 Phase 2: Domain & Schema Definition
-Define Domain
+ldapadd -Y EXTERNAL -H ldapi:/// -f chrootpw.ldif
+```
+
+---
+
+## 🌐 Phase 2 — Domain Setup
+
+```bash
 cat <<EOF > rootdb.ldif
 dn: olcDatabase={2}mdb,cn=config
 changetype: modify
@@ -43,19 +99,34 @@ replace: olcRootDN
 olcRootDN: cn=admin,dc=lab,dc=local
 -
 add: olcRootPW
-olcRootPW: {SSHA}PASTE_YOUR_DOMAIN_HASH_HERE
+olcRootPW: {SSHA}PASTE_HASH
 EOF
 
-sudo ldapmodify -Y EXTERNAL -H ldapi:/// -f rootdb.ldif
-Load Required Schemas
-sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
-sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
-sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
-🔐 Phase 3: Security & Networking (Hardening)
-Firewall Configuration
-sudo firewall-cmd --add-service={ldap,ldaps} --permanent
-sudo firewall-cmd --reload
-Disable Anonymous Bind
+ldapmodify -Y EXTERNAL -H ldapi:/// -f rootdb.ldif
+```
+
+### 📦 Load Schemas
+
+```bash
+ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
+ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
+```
+
+---
+
+## 🔐 Phase 3 — Security Hardening
+
+### 🔥 Firewall
+
+```bash
+firewall-cmd --add-service={ldap,ldaps} --permanent
+firewall-cmd --reload
+```
+
+### 🚫 Disable Anonymous Bind
+
+```bash
 cat <<EOF > disable_anon.ldif
 dn: cn=config
 changetype: modify
@@ -64,26 +135,27 @@ olcDisallows: bind_anon
 -
 add: olcRequires
 olcRequires: authc
-
-dn: olcDatabase={2}mdb,cn=config
-changetype: modify
-add: olcAccess
-olcAccess: {0}to * by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage by * break
-olcAccess: {1}to * by self read by dn.base="cn=admin,dc=lab,dc=local" write by * none
 EOF
 
-sudo ldapadd -Y EXTERNAL -H ldapi:/// -f disable_anon.ldif
-🔒 Phase 4: SSL/TLS (LDAPS) Setup
-Generate Certificates
-sudo mkdir -p /etc/openldap/certs
+ldapadd -Y EXTERNAL -H ldapi:/// -f disable_anon.ldif
+```
 
-sudo openssl req -new -x509 -nodes \
+---
+
+## 🔒 Phase 4 — TLS / LDAPS
+
+```bash
+mkdir -p /etc/openldap/certs
+
+openssl req -new -x509 -nodes \
 -out /etc/openldap/certs/ldapcert.pem \
 -keyout /etc/openldap/certs/ldapkey.pem \
 -days 3650
 
-sudo chown ldap:ldap /etc/openldap/certs/*.pem
-Apply TLS Configuration
+chown ldap:ldap /etc/openldap/certs/*.pem
+```
+
+```bash
 cat <<EOF > certs.ldif
 dn: cn=config
 changetype: modify
@@ -92,17 +164,18 @@ olcTLSCertificateFile: /etc/openldap/certs/ldapcert.pem
 -
 replace: olcTLSCertificateKeyFile
 olcTLSCertificateKeyFile: /etc/openldap/certs/ldapkey.pem
--
-replace: olcTLSCACertificateFile
-olcTLSCACertificateFile: /etc/openldap/certs/ldapcert.pem
 EOF
 
-sudo ldapmodify -Y EXTERNAL -H ldapi:/// -f certs.ldif
-👥 Phase 5: Identity Tree Construction
-Base Structure
-cat <<EOF > base_structure.ldif
+ldapmodify -Y EXTERNAL -H ldapi:/// -f certs.ldif
+```
+
+---
+
+## 👥 Phase 5 — Directory Structure
+
+```bash
+cat <<EOF > base.ldif
 dn: dc=lab,dc=local
-objectClass: top
 objectClass: dcObject
 objectClass: organization
 o: lab
@@ -117,69 +190,67 @@ objectClass: organizationalUnit
 ou: Groups
 EOF
 
-ldapadd -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -f base_structure.ldif
-Users & Groups
-cat <<EOF > expansion.ldif
-# --- Users ---
+ldapadd -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -f base.ldif
+```
 
-dn: uid=shashi,ou=People,dc=lab,dc=local
-objectClass: inetOrgPerson
-objectClass: posixAccount
-objectClass: shadowAccount
-cn: Shashi
-sn: Shashi
-uid: shashi
-uidNumber: 2000
-gidNumber: 2000
-homeDirectory: /home/shashi
-loginShell: /bin/bash
-userPassword: YourSecretPassword123
-mail: shashi@lab.local
+---
 
-# --- Groups ---
+## ⚡ Performance Optimization
 
-dn: cn=admins,ou=Groups,dc=lab,dc=local
-objectClass: posixGroup
-cn: admins
-gidNumber: 2000
-memberUid: shashi
-EOF
-
-ldapmodify -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -a -f expansion.ldif
-Indexing (Performance Optimization)
+```bash
 cat <<EOF > indexing.ldif
 dn: olcDatabase={2}mdb,cn=config
 changetype: modify
 replace: olcDbIndex
-olcDbIndex: objectClass eq
-olcDbIndex: uid pres,eq
-olcDbIndex: mail pres,eq
-olcDbIndex: cn pres,eq,sub
-olcDbIndex: memberUid eq
+olcDbIndex: uid eq
+olcDbIndex: cn eq
 EOF
 
-sudo ldapmodify -Y EXTERNAL -H ldapi:/// -f indexing.ldif
-💾 Phase 6: Maintenance & Backups
-Backup Script (Example)
-# /usr/local/bin/ldap_backup.sh
+ldapmodify -Y EXTERNAL -H ldapi:/// -f indexing.ldif
+```
 
-BACKUP_DIR="/var/backups/ldap"
-DATE=$(date +%F)
+---
 
-mkdir -p $BACKUP_DIR
+## 💾 Backup Strategy
 
-slapcat -b "dc=lab,dc=local" -l $BACKUP_DIR/ldap-$DATE.ldif
-Cron Job
-00 02 * * * /usr/local/bin/ldap_backup.sh > /dev/null 2>&1
-🔍 Verification Commands
-Verify Certificate
-openssl x509 -in /etc/openldap/certs/ldapcert.pem -text -noout | grep -E "Subject:|Not After"
-Verify Key Pair Match
-openssl x509 -noout -modulus -in /etc/openldap/certs/ldapcert.pem | openssl md5
-openssl rsa -noout -modulus -in /etc/openldap/certs/ldapkey.pem | openssl md5
-Verify LDAP Tree
-ldapsearch -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -b "dc=lab,dc=local" dn
-Test LDAPS
-LDAPTLS_REQCERT=never ldapsearch -x -H ldaps://localhost -D "cn=admin,dc=lab,dc=local"
-Monitor Logs
-sudo journalctl -u slapd -f
+```bash
+slapcat -b "dc=lab,dc=local" -l /var/backups/ldap.ldif
+```
+
+---
+
+## 🔍 Verification
+
+```bash
+ldapsearch -x -b "dc=lab,dc=local"
+```
+
+```bash
+LDAPTLS_REQCERT=never ldapsearch -x -H ldaps://localhost
+```
+
+```bash
+journalctl -u slapd -f
+```
+
+---
+
+## 🧠 Key Takeaways
+
+* Security first: disable anonymous bind
+* Always use TLS (LDAPS)
+* LDAP is strict — syntax matters
+* Indexing improves performance
+* Logs are your best debugging tool
+
+---
+
+## 🚀 Final Thoughts
+
+This lab demonstrates a **real-world approach to identity management** using OpenLDAP.
+
+It forms a strong foundation for:
+
+* Centralized authentication
+* Infrastructure integration
+* Enterprise directory services
