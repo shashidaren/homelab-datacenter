@@ -1,20 +1,7 @@
-# 🔐 OpenLDAP Lab Guide (Verified Build)
-
-<p align="center">
-  <b>Rocky Linux 9 • LDAPS • Identity Management Lab</b><br>
-  Production-style LDAP deployment with full configuration and security hardening
-</p>
-
----
-
-## 🧱 Phase 1 — Installation
-
-```bash
-sudo dnf config-manager --set-enabled plus
+🔐 OpenLDAP Lab Guide (Verified Build)<p align="center"><b>Rocky Linux 9 • LDAPS • Identity Management Lab</b>Production-style LDAP deployment with full configuration and security hardening</p>🧱 Phase 1 — InstallationBashsudo dnf config-manager --set-enabled plus
 sudo dnf install -y openldap-servers openldap-clients
 sudo systemctl enable --now slapd
-
-Set Config Admin PasswordGenerate the hash: slappasswd -s "Telco666"Apply the hash below:Bashcat <<EOF > chrootpw.ldif
+Set Config Admin PasswordGenerate hash: slappasswd -s "Telco666"Apply the hash below:Bashcat <<EOF > chrootpw.ldif
 dn: olcDatabase={0}config,cn=config
 changetype: modify
 add: olcRootPW
@@ -39,9 +26,9 @@ ldapmodify -Y EXTERNAL -H ldapi:/// -f rootdb.ldif
 Load SchemasBashldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
 ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
 ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
-🔐 Phase 3 — Security Hardening (Fixed ACLs)FirewallBashfirewall-cmd --add-service={ldap,ldaps} --permanent
+🔐 Phase 3 — Security Hardening (Working ACLs)FirewallBashfirewall-cmd --add-service={ldap,ldaps} --permanent
 firewall-cmd --reload
-Disable Anonymous & Apply Working ACLsNote: This specific ACL allows "anonymous auth" which is required for users to bind (login).Bashcat <<EOF > disable_anon.ldif
+Disable Anonymous & Apply Fixed ACLsNote: This ACL allows "anonymous auth" which is required for users to login.Bashcat <<EOF > disable_anon.ldif
 dn: cn=config
 changetype: modify
 add: olcDisallows
@@ -94,8 +81,7 @@ ou: Groups
 EOF
 
 ldapadd -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -f base_structure.ldif
-Users & Groups (SSHA Hashed)Generate hashes for users using slappasswd before applying.Bashcat <<EOF > expansion.ldif
-# User: Shashi
+Add SSHA Hashed UsersGenerate hash: slappasswd -s "Telco777"Bashcat <<EOF > expansion.ldif
 dn: uid=shashi,ou=People,dc=lab,dc=local
 objectClass: inetOrgPerson
 objectClass: posixAccount
@@ -110,19 +96,11 @@ loginShell: /bin/bash
 userPassword: {SSHA}PASTE_HASH_HERE
 mail: shashi@lab.local
 
-# Group: Admins
 dn: cn=admins,ou=Groups,dc=lab,dc=local
 objectClass: posixGroup
 cn: admins
 gidNumber: 2000
 memberUid: shashi
-
-# Group: Viewers
-dn: cn=viewers,ou=Groups,dc=lab,dc=local
-objectClass: posixGroup
-cn: viewers
-gidNumber: 2001
-memberUid: siva
 EOF
 
 ldapadd -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -f expansion.ldif
@@ -142,7 +120,6 @@ ldap_search_base = dc=lab,dc=local
 ldap_tls_reqcert = never
 cache_credentials = true
 enumerate = true
-# Bind credentials for lookup
 ldap_default_bind_dn = cn=admin,dc=lab,dc=local
 ldap_default_authtok = Telco666
 EOF
@@ -150,4 +127,4 @@ EOF
 chmod 600 /etc/sssd/sssd.conf
 authselect select sssd with-mkhomedir --force
 systemctl enable --now sssd oddjobd
-🔍 Verification (The "Golden" Commands)TaskCommandVerify Local Bindldapwhoami -x -D "uid=shashi,ou=People,dc=lab,dc=local" -WCheck SSSD Userid shashiVerify TLSLDAPTLS_REQCERT=never ldapsearch -x -H ldaps://localhostCheck Cert Matchopenssl x509 -noout -modulus -in /etc/openldap/certs/ldapcert.pem | openssl md5
+🔍 VerificationTaskCommandVerify Local Bindldapwhoami -x -D "uid=shashi,ou=People,dc=lab,dc=local" -WCheck SSSD Userid shashiVerify TLSLDAPTLS_REQCERT=never ldapsearch -x -H ldaps://localhost
