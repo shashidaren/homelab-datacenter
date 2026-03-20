@@ -254,6 +254,44 @@ ldapmodify -Y EXTERNAL -H ldapi:/// -f indexing.ldif
 
 ---
 
+Configure Linux clients to authenticate against OpenLDAP using SSSD.
+
+📦 Install Required Packages
+sudo dnf install -y sssd sssd-ldap oddjob oddjob-mkhomedir authselect-compat
+⚙️ Configure SSSD
+
+Edit:
+
+vim /etc/sssd/sssd.conf
+```bash
+[sssd]
+services = nss, pam
+config_file_version = 2
+domains = default
+
+[domain/default]
+id_provider = ldap
+auth_provider = ldap
+
+ldap_uri = ldap://192.168.0.112
+ldap_search_base = dc=lab,dc=local
+
+ldap_tls_reqcert = never
+
+cache_credentials = true
+enumerate = true
+
+i🔒 Set Permissions
+chmod 600 /etc/sssd/sssd.conf
+🏠 Enable Auto Home Directory Creation
+authselect select sssd with-mkhomedir --force
+systemctl enable --now oddjobd
+▶️ Start SSSD
+systemctl enable --now sssd
+🔍 Test Authentication
+id shashi
+getent passwd shashi
+
 ## 💾 Maintenance & Backup
 
 ```bash
