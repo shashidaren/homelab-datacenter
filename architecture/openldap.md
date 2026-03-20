@@ -280,23 +280,26 @@ ldap_tls_reqcert = never
 
 cache_credentials = true
 enumerate = true
----
+```
 
 i🔒 Set Permissions
 ```bash
 chmod 600 /etc/sssd/sssd.conf
----
+```
 🏠 Enable Auto Home Directory Creation
 ```bash
 authselect select sssd with-mkhomedir --force
 systemctl enable --now oddjobd
----
+```
 ▶️ Start SSSD
+```bash
 systemctl enable --now sssd
+```
 🔍 Test Authentication
+```bash
 id shashi
 getent passwd shashi
-
+```
 ## 💾 Maintenance & Backup
 
 ```bash
