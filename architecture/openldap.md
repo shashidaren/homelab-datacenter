@@ -230,7 +230,7 @@ memberUid: siva
 
 EOF
 
-ldapmodify -x -D "cn=admin,dc=lab,dc=local" -w "Telco666" -a -f expansion.ldif
+ldapmodify -x -D "cn=admin,dc=lab,dc=local" -w "" -a -f expansion.ldif
 ```
 
 ---
@@ -258,6 +258,12 @@ ldapmodify -Y EXTERNAL -H ldapi:/// -f indexing.ldif
 
 ```bash
 slapcat -b "dc=lab,dc=local" -l /var/backups/ldap.ldif
+
+# 1. Backup Script Location
+# /usr/local/bin/ldap_backup.sh
+# 2. Crontab (Daily at 02:00)
+00 02 * * * /usr/local/bin/ldap_backup.sh > /dev/null 2>&1
+
 ```
 
 ---
