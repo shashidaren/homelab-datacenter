@@ -8,5 +8,27 @@ ldap_packages:
   - openldap-servers
   - openldap-clients
 
-ldap_users: []
-ldap_groups: []
+ldap_users:
+  - name: "Shashi"
+    uid: "shashi"
+    uidNumber: 2000
+    gidNumber: 2000
+    home: "/home/shashi"
+    shell: "/bin/bash"
+    mail: "shashi@lab.local"
+    password: "YourSecretPassword123"
+
+  - name: "Test User"
+    uid: "testuser"
+    uidNumber: 2001
+    gidNumber: 2000
+    home: "/home/testuser"
+    shell: "/bin/bash"
+    mail: "test@lab.local"
+    password: "Password456"
+
+ldap_groups:
+  - name: "admins"
+    gidNumber: 2000
+    members:
+      - "shashi"  

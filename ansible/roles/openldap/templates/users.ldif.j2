@@ -3,14 +3,14 @@ dn: uid={{ user.uid }},ou=People,{{ ldap_base_dn }}
 objectClass: inetOrgPerson
 objectClass: posixAccount
 objectClass: shadowAccount
-cn: {{ user.cn }}
-sn: {{ user.sn }}
+cn: {{ user.name }}
+sn: {{ user.name.split()[-1] }}
 uid: {{ user.uid }}
 uidNumber: {{ user.uidNumber }}
 gidNumber: {{ user.gidNumber }}
-homeDirectory: /home/{{ user.uid }}
-loginShell: /bin/bash
-mail: {{ user.uid }}@{{ ldap_domain }}
+homeDirectory: {{ user.home | default('/home/' ~ user.uid) }}
+loginShell: {{ user.shell | default('/bin/bash') }}
+mail: {{ user.mail | default(user.uid ~ '@' ~ ldap_domain) }}
 userPassword: {{ user.password }}
 
 {% endfor %}

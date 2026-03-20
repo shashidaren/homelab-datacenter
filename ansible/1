@@ -3,10 +3,10 @@ dn: cn={{ group.name }},ou=Groups,{{ ldap_base_dn }}
 objectClass: posixGroup
 objectClass: top
 cn: {{ group.name }}
-gidNumber: {{ group.gidNumber | trim }}
+gidNumber: {{ group.gidNumber }}  {# Changed from group.gid to group.gidNumber #}
 {% if group.members is defined %}
 {% for member in group.members %}
-memberUid: {{ member | trim }}
+memberUid: {{ member }}
 {% endfor %}
 {% endif %}
 
