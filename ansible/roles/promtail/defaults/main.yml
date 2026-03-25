@@ -1,0 +1,6 @@
+---
+loki_server: 192.168.0.113
+promtail_http_port: 9080
+log_paths:
+  - /var/log/*.log
+

@@ -1,0 +1,7 @@
+---
+- name: Install Promtail
+  hosts: monitoring_targets
+  become: yes
+
+  roles:
+    - promtail

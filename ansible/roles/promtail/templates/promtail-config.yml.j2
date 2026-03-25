@@ -1,0 +1,30 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://192.168.0.111:3100/loki/api/v1/push  # Replace with your Loki IP
+
+scrape_configs:
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          host: "{{ inventory_hostname }}"  # This fixes your dashboard!
+          env: lab
+          __path__: /var/log/*.log          # Targets only log files
+    
+  - job_name: journal
+    journal:
+      max_age: 12h
+      labels:
+        job: systemd-journal
+        host: "{{ inventory_hostname }}"    # Fixes dashboard for systemd logs
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: 'unit'
