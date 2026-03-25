@@ -2,6 +2,9 @@
 - name: Application - Deploy AI-Ops Stack
   hosts: docker
   become: yes
+
+  vars_files:
+    - ../group_vars/all/vault.yml
   roles:
     - docker  
     - ai_ops_stack

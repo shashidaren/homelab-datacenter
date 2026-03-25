@@ -1,0 +1,7 @@
+---
+# handlers file for ai_ops_stack
+
+- name: restart alertmanager
+  ansible.builtin.command: docker compose restart alertmanager
+  args:
+    chdir: /opt/ai-ops

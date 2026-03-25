@@ -59,10 +59,23 @@
     src: prometheus-config/
     dest: /opt/ai-ops/prometheus-config/
 
-- name: Copy Alertmanager config
-  ansible.builtin.copy:
-    src: alertmanager-config/
-    dest: /opt/ai-ops/alertmanager-config/
+
+- name: Create Alertmanager config directory
+  ansible.builtin.file:
+    path: /opt/ai-ops/alertmanager-config
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy Alertmanager configuration from role template
+  template:
+    src: alertmanager.yml.j2
+    dest: /opt/ai-ops/alertmanager-config/alertmanager.yml
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart alertmanager      
 
 - name: Copy Loki config
   ansible.builtin.copy:
