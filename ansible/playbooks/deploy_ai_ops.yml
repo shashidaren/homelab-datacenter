@@ -3,5 +3,6 @@
   hosts: docker
   become: yes
   roles:
-    - ai_ops_stack
+    - docker  
+
 

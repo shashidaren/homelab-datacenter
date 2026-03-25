@@ -1,38 +1,54 @@
-Role Name
-=========
+# Docker Role
 
-A brief description of the role goes here.
+## 📌 Purpose
 
-Requirements
-------------
+Installs and configures Docker Engine on Rocky Linux 9 servers.
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+---
 
-Role Variables
---------------
+## ⚙️ What this role does
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+* Removes Podman and Buildah
+* Installs Docker CE and dependencies
+* Adds Docker repository
+* Starts and enables Docker service
+* Adds user to docker group
 
-Dependencies
-------------
+---
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+## 📂 Variables
 
-Example Playbook
-----------------
+| Variable    | Default      | Description                |
+| ----------- | ------------ | -------------------------- |
+| docker_user | ansible_user | User added to docker group |
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+---
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+## ▶️ Usage
 
-License
--------
+```yaml
+- hosts: docker
+  roles:
+    - docker
+```
 
-BSD
+---
 
-Author Information
-------------------
+## 🧪 Validation
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+After running:
+
+```bash
+docker --version
+docker compose version
+docker run hello-world
+```
+
+---
+
+## ⚠️ Notes
+
+* Requires Rocky Linux 9 / EL9
+* Requires internet access for Docker repo
+* User must re-login after group assignment
+
