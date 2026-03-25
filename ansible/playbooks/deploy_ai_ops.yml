@@ -4,5 +4,5 @@
   become: yes
   roles:
     - docker  
-
+    - ai_ops_stack
 

@@ -3,25 +3,22 @@
   ansible.builtin.dnf:
     name: epel-release
     state: present
-  become: true
 
-- name: Install Node Exporter from EPEL
+- name: Install Node Exporter
   ansible.builtin.dnf:
     name: node_exporter
     state: present
-  become: true
 
-- name: Ensure Node Exporter service is enabled and started
+- name: Ensure Node Exporter is started
   ansible.builtin.systemd:
     name: node_exporter
     state: started
     enabled: true
-  become: true
 
-- name: Open Firewall Port 9100
+- name: Open Firewall Port 9100 (ignore if firewalld not running)
   ansible.posix.firewalld:
     port: 9100/tcp
     permanent: true
     state: enabled
     immediate: true
-  become: true
+  ignore_errors: yes

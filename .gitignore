@@ -1,0 +1,14 @@
+# Security: Ignore plain text password files
+*.vault_pass.txt
+.env
+
+# Ansible: Ignore retry files and temporary swap files
+*.retry
+*.swp
+.ansible_cache/
+
+# OS/Editor: Ignore system junk
+.DS_Store
+.idea/
+.vscode/
+__pycache__/

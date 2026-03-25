@@ -1,6 +1,0 @@
----
-- name: Setup Docker on Homelab Nodes
-  hosts: docker
-  roles:
-    - docker
-

@@ -1,0 +1,65 @@
+groups:
+- name: node_alerts
+  rules:
+  - alert: InstanceDown
+    expr: up == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Instance Down"
+      description: "{{ $labels.instance }} is down"
+
+  - alert: HighCPUUsage
+    expr: 100 - (avg by(instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU Usage"
+      description: "CPU usage > 80% on {{ $labels.instance }}"
+
+  - alert: HighMemoryUsage
+    expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High Memory Usage"
+      description: "Memory usage > 85% on {{ $labels.instance }}"
+
+  - alert: DiskSpaceLow
+    expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 15
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Disk Space Low"
+      description: "Disk < 15% free on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+  - alert: DiskInodesLow
+    expr: (node_filesystem_files_free / node_filesystem_files) * 100 < 10
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Disk Inodes Low"
+      description: "Inodes < 10% free on {{ $labels.instance }}"
+
+  - alert: HighNetworkTraffic
+    expr: rate(node_network_receive_bytes_total[5m]) > 100000000
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High Network Traffic"
+      description: "High inbound traffic on {{ $labels.instance }}"
+
+  - alert: HighLoadAverage
+    expr: node_load1 > 2
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High Load Average"
+      description: "Load average is high on {{ $labels.instance }}"

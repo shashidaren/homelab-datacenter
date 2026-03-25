@@ -9,180 +9,94 @@
     name: docker
     executable: pip3
   become: true
-
-- name: Create Observability directories
+ 
+- name: Create runtime directories
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: "{{ item }}"
     state: directory
-    mode: '0775'
-    owner: "{{ item.owner }}"
-    group: "{{ item.owner }}"
-  become: true
   loop:
-    - { path: '/opt/ai-ops/loki', owner: '10001' }
-    - { path: '/opt/ai-ops/loki-config', owner: '10001' }
-    - { path: '/opt/ai-ops/promtail', owner: '10001' }
-    - { path: '/opt/ai-ops/prometheus-config', owner: '10001' }
-    - { path: '/opt/ai-ops/grafana', owner: '472' }
-    - { path: '/opt/ai-ops/prometheus', owner: '65534' } 
-    - { path: '/opt/ai-ops/alertmanager-config', owner: '10001' }
+    - /opt/ai-ops/prometheus
+    - /opt/ai-ops/loki
+    - /opt/ai-ops/grafana
+      
 
-- name: Create Loki Configuration
+- name: Ensure base directory exists
+  ansible.builtin.file:
+    path: /opt/ai-ops
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Fix Loki permissions
+  ansible.builtin.file:
+    path: /opt/ai-ops/loki
+    owner: 10001
+    group: 10001
+    recurse: yes
+
+- name: Fix Grafana permissions
+  ansible.builtin.file:
+    path: /opt/ai-ops/grafana
+    owner: 472
+    group: 472
+    recurse: yes
+
+- name: Fix Prometheus permissions
+  ansible.builtin.file:
+    path: /opt/ai-ops/prometheus
+    owner: 65534
+    group: 65534
+    recurse: yes
+
+- name: Copy docker-compose.yml
   ansible.builtin.copy:
-    dest: /opt/ai-ops/loki-config/local-config.yaml
-    content: |
-      auth_enabled: false
-      server:
-        http_listen_port: 3100
-      common:
-        instance_addr: 127.0.0.1
-        path_prefix: /loki
-        storage:
-          filesystem:
-            chunks_directory: /loki/chunks
-            rules_directory: /loki/rules
-        replication_factor: 1
-        ring:
-          kvstore:
-            store: inmemory
-      limits_config:
-        retention_period: 168h
-      compactor:
-        working_directory: /loki/compactor
-        retention_enabled: true
-      schema_config:
-        configs:
-          - from: 2024-01-01
-            store: tsdb
-            object_store: filesystem
-            schema: v13
-            index:
-              prefix: index_
-              period: 24h
-  become: true
+    src: docker-compose.yml
+    dest: /opt/ai-ops/docker-compose.yml
 
-- name: Create Prometheus Alert Rules
-  ansible.builtin.template:
-    src: node_alerts.yml.j2
-    dest: /opt/ai-ops/prometheus-config/node_alerts.yml
-    mode: '0644'
-  become: true
-
-- name: Create Prometheus Main Configuration
-  ansible.builtin.template:
-    src: prometheus.yml.j2 # This is where the magic happens
-    dest: /opt/ai-ops/prometheus-config/prometheus.yml
-  become: true
-
-- name: Create Promtail Configuration
+- name: Copy Prometheus config
   ansible.builtin.copy:
-    dest: /opt/ai-ops/promtail/config.yml
-    content: |
-      server:
-        http_listen_port: 9080
-      positions:
-        filename: /tmp/positions.yaml
-      clients:
-        - url: http://loki:3100/loki/api/v1/push
-      scrape_configs:
-        - job_name: system
-          static_configs:
-            - targets: [localhost]
-              labels:
-                job: varlogs
-                host: docker01
-                __path__: /var/log/*.log
-  become: true
+    src: prometheus-config/
+    dest: /opt/ai-ops/prometheus-config/
 
-- name: Create Alertmanager Configuration
+- name: Copy Alertmanager config
   ansible.builtin.copy:
-    dest: /opt/ai-ops/alertmanager-config/alertmanager.yml
-    content: |
-      global:
-        resolve_timeout: 5m
-      route:
-        group_by: ['alertname']
-        group_wait: 10s
-        group_interval: 10s
-        repeat_interval: 1h
-        receiver: 'web.hook'
-      receivers:
-      - name: 'web.hook'
-        webhook_configs:
-        - url: 'http://127.0.0.1:5001/' # Placeholder for now
-  become: true
+    src: alertmanager-config/
+    dest: /opt/ai-ops/alertmanager-config/
 
-- name: Create Grafana LDAP Configuration
-  ansible.builtin.template:
-    src: ldap.toml.j2
-    dest: /opt/ai-ops/grafana/ldap.toml
-    owner: '472' # Grafana user ID
-    group: '472'
-    mode: '0644'
-  become: true
+- name: Copy Loki config
+  ansible.builtin.copy:
+    src: loki-config/
+    dest: /opt/ai-ops/loki-config/
 
-- name: Verify connection to OpenLDAP (VM 112)
-  ansible.builtin.wait_for:
-    host: "{{ ldap_server_ip | default('192.168.0.112') }}"
-    port: 389
-    timeout: 5
-    msg: "Cannot reach OpenLDAP server on port 389. Check VM 112 or Firewalld."
-  become: false
+- name: Copy Promtail config
+  ansible.builtin.copy:
+    src: promtail/
+    dest: /opt/ai-ops/promtail/
 
-- name: Deploy AI-Ops Stack
-  community.docker.docker_compose_v2:
-    project_name: ai-ops
-    definition:
-      version: '3.8'
-      services:
-        loki:
-          image: grafana/loki:latest
-          ports: ["3100:3100"]
-          volumes:
-            - /opt/ai-ops/loki:/loki:Z
-            - /opt/ai-ops/loki-config/local-config.yaml:/etc/loki/local-config.yaml:Z
-          command: -config.file=/etc/loki/local-config.yaml
-          restart: always
+- name: Start AI-Ops stack
+  ansible.builtin.shell: docker compose up -d
+  args:
+    chdir: /opt/ai-ops
 
-        prometheus:
-          image: prom/prometheus:latest
-          ports: ["9090:9090"]
-          volumes:
-            - /opt/ai-ops/prometheus-config:/etc/prometheus:Z
-            - /opt/ai-ops/prometheus:/prometheus:Z
-          command:
-            - '--config.file=/etc/prometheus/prometheus.yml'
-            - '--storage.tsdb.path=/prometheus'
-            - '--storage.tsdb.retention.time=7d'
-          restart: always
+- name: Restart AI-Ops stack
+  ansible.builtin.shell: docker compose down && docker compose up -d
+  args:
+    chdir: /opt/ai-ops
 
-        alertmanager:
-          image: prom/alertmanager:latest
-          ports: ["9093:9093"]
-          volumes:
-            - /opt/ai-ops/alertmanager-config:/etc/alertmanager:Z
-          command:
-            - '--config.file=/etc/alertmanager/alertmanager.yml'
-          restart: always
+- name: Create Grafana provisioning directory
+  ansible.builtin.file:
+    path: /opt/ai-ops/grafana/provisioning/datasources
+    state: directory
+    owner: 472
+    group: 472
+    mode: '0755'
 
-        promtail:
-          image: grafana/promtail:latest
-          volumes:
-            - /var/log:/var/log:ro,Z
-            - /opt/ai-ops/promtail/config.yml:/etc/promtail/config.yml:Z
-          command: -config.file=/etc/promtail/config.yml
-          restart: always
+- name: Copy datasource config
+  ansible.builtin.copy:
+    src: grafana/provisioning/datasources/datasource.yml
+    dest: /opt/ai-ops/grafana/provisioning/datasources/datasource.yml
+    owner: 472
+    group: 472
+    mode: '0644'      
 
-        grafana:
-          image: grafana/grafana:latest
-          ports: ["3000:3000"]
-          volumes:
-            - /opt/ai-ops/grafana:/var/lib/grafana:Z
-            - /opt/ai-ops/grafana/ldap.toml:/etc/grafana/ldap.toml:ro,Z # Mount the config
-          environment:
-            - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password | default('admin') }}
-            - GF_AUTH_LDAP_ENABLED=true
-            - GF_AUTH_LDAP_CONFIG_FILE=/etc/grafana/ldap.toml
-            - GF_AUTH_LDAP_ALLOW_SIGN_UP=true
-          restart: always
-  become: true

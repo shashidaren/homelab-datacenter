@@ -1,0 +1,16 @@
+- name: Ensure rules directory exists
+  ansible.builtin.file:
+    path: /opt/ai-ops/prometheus/rules
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy node alert rules
+  ansible.builtin.template:
+    src: node_alerts.yml.j2
+    dest: /opt/ai-ops/prometheus/rules/node_alerts.yml
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload Prometheus
