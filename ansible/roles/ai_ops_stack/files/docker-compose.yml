@@ -69,8 +69,8 @@ services:
     ports:
       - "9221:9221"
     environment:
-      - PVE_HOST=192.168.0.110
+      - PVE_HOST=192.168.0.108
       - PVE_USER=prometheus@pve
       - PVE_TOKEN_NAME=prom-token
       - PVE_TOKEN_VALUE=ec70db6c-5735-4154-abd8-c6459eafd537
-
+      - PVE_VERIFY_SSL=false
